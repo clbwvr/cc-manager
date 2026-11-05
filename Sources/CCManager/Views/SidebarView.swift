@@ -8,6 +8,8 @@ struct SidebarView: View {
     @State private var renameProject: ProjectRecord?
     @State private var editProjectId: String?
     @State private var deleteProjectId: String?
+    @State private var showTodo = true
+    @State private var showComplete = false
 
     var body: some View {
         List(selection: $filter) {
@@ -21,29 +23,12 @@ struct SidebarView: View {
             }
 
             Section {
-                ForEach(projectItems) { item in
-                    Label(item.name, systemImage: "folder")
-                        .badge(item.count)
-                        .contextMenu {
-                            Button("Edit…") {
-                                editProjectId = item.id.projectId
-                            }
-                            Button("Rename…") {
-                                renameProject = ProjectRecord(id: item.id.projectId ?? "", name: item.name)
-                            }
-                            Divider()
-                            Button("Delete", role: .destructive) {
-                                deleteProjectId = item.id.projectId
-                            }
-                        }
-                        .help(projectHelp(for: item))
-                        .dropDestination(for: ConversationDragPayload.self) { payloads, _ in
-                            handleDrop(payloads: payloads, projectId: item.projectId)
-                        }
+                ForEach(projectItems(for: .active)) { item in
+                    projectRow(item)
                 }
             } header: {
                 HStack {
-                    Text("Projects")
+                    Text("Active")
                     Spacer()
                     Button {
                         newProjectSheet = true
@@ -52,6 +37,26 @@ struct SidebarView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("New project")
+                }
+            }
+
+            if !projectItems(for: .todo).isEmpty {
+                Section(isExpanded: $showTodo) {
+                    ForEach(projectItems(for: .todo)) { item in
+                        projectRow(item)
+                    }
+                } header: {
+                    Text("Todo")
+                }
+            }
+
+            if !projectItems(for: .complete).isEmpty {
+                Section(isExpanded: $showComplete) {
+                    ForEach(projectItems(for: .complete)) { item in
+                        projectRow(item)
+                    }
+                } header: {
+                    Text("Complete")
                 }
             }
         }
@@ -108,6 +113,43 @@ struct SidebarView: View {
         } message: { _ in
             Text("Conversations in this project will become unassigned. The conversations themselves are not deleted.")
         }
+    }
+
+    @ViewBuilder
+    private func projectRow(_ item: ProjectItem) -> some View {
+        let icon: String = switch item.status {
+        case .active: "folder.fill"
+        case .todo: "folder.badge.questionmark"
+        case .complete: "folder.badge.checkmark"
+        }
+        Label(item.name, systemImage: icon)
+            .badge(item.count)
+            .contextMenu {
+                Button("Edit…") {
+                    editProjectId = item.id.projectId
+                }
+                Button("Rename…") {
+                    renameProject = ProjectRecord(id: item.id.projectId ?? "", name: item.name)
+                }
+                Divider()
+                Menu("Move to") {
+                    ForEach(ProjectStatus.allCases, id: \.self) { status in
+                        if status != item.status {
+                            Button(status.rawValue.capitalized) {
+                                if let pid = item.projectId { store.setProjectStatus(pid, status: status) }
+                            }
+                        }
+                    }
+                }
+                Divider()
+                Button("Delete", role: .destructive) {
+                    deleteProjectId = item.id.projectId
+                }
+            }
+            .help(projectHelp(for: item))
+            .dropDestination(for: ConversationDragPayload.self) { payloads, _ in
+                handleDrop(payloads: payloads, projectId: item.projectId)
+            }
     }
 
     private func projectHelp(for item: ProjectItem) -> String {
@@ -168,6 +210,7 @@ struct SidebarView: View {
         let id: SidebarFilter
         let name: String
         let count: Int
+        let status: ProjectStatus
         var projectId: String? {
             if case .project(let pid) = id { return pid }
             return nil
@@ -185,10 +228,10 @@ struct SidebarView: View {
         ]
     }
 
-    private var projectItems: [ProjectItem] {
-        store.projects.map { proj in
+    private func projectItems(for status: ProjectStatus) -> [ProjectItem] {
+        store.projects.filter { $0.status == status }.map { proj in
             let count = store.conversations.filter { $0.projectId == proj.id }.count
-            return ProjectItem(id: .project(proj.id), name: proj.name, count: count)
+            return ProjectItem(id: .project(proj.id), name: proj.name, count: count, status: proj.status)
         }
     }
 }

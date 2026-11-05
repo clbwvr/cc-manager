@@ -9,6 +9,10 @@ struct ParsedSession {
 }
 
 enum JSONLParser {
+    /// Cap on per-session searchable text. Bounds resident memory and on-disk cache size;
+    /// the big transcripts run to tens of MB and full-text search past this adds little.
+    static let searchableCap = 200_000
+
     static func parse(at url: URL, previewLimit: Int = 12) -> ParsedSession? {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         var cwd = ""
@@ -16,6 +20,9 @@ enum JSONLParser {
         var count = 0
         var previews: [PreviewMessage] = []
         var searchable = ""
+        // New-format fields (Claude Code v1.x+ no longer writes user/assistant lines)
+        var aiTitle = ""
+        var lastPrompts: [String] = []
         searchable.reserveCapacity(content.count / 2)
 
         for rawLine in content.split(separator: "\n", omittingEmptySubsequences: true) {
@@ -24,6 +31,16 @@ enum JSONLParser {
                 continue
             }
             guard let type = obj["type"] as? String else { continue }
+
+            if type == "ai-title" {
+                if let t = obj["aiTitle"] as? String, !t.isEmpty { aiTitle = t }
+                continue
+            }
+            if type == "last-prompt" {
+                if let p = obj["lastPrompt"] as? String, !p.isEmpty { lastPrompts.append(p) }
+                continue
+            }
+
             if type != "user" && type != "assistant" { continue }
 
             let isSidechain = (obj["isSidechain"] as? Bool) ?? false
@@ -40,12 +57,28 @@ enum JSONLParser {
                 if previews.count < previewLimit {
                     previews.append(PreviewMessage(role: type, text: text))
                 }
-                searchable.append(text.lowercased())
-                searchable.append("\n")
+                if searchable.count < searchableCap {
+                    searchable.append(text.lowercased())
+                    searchable.append("\n")
+                }
             }
         }
 
-        guard count > 0 else { return nil }
+        // New format: no user/assistant lines but may have ai-title / last-prompt
+        if count == 0 {
+            guard !aiTitle.isEmpty || !lastPrompts.isEmpty else { return nil }
+            let title = aiTitle.isEmpty ? (lastPrompts.last ?? "") : aiTitle
+            let promptPreviews = lastPrompts.suffix(previewLimit).map { PreviewMessage(role: "user", text: $0) }
+            let searchText = (lastPrompts + [aiTitle]).joined(separator: "\n").lowercased()
+            return ParsedSession(
+                cwd: cwd,
+                firstUserMessage: title,
+                messageCount: max(1, lastPrompts.count),
+                previews: promptPreviews,
+                searchableText: searchText
+            )
+        }
+
         return ParsedSession(
             cwd: cwd,
             firstUserMessage: firstUser,
@@ -76,17 +109,35 @@ enum JSONLParser {
     static func loadAllMessages(at url: URL) -> [PreviewMessage] {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }
         var messages: [PreviewMessage] = []
+        var aiTitle = ""
+        var lastPrompts: [String] = []
         for rawLine in content.split(separator: "\n", omittingEmptySubsequences: true) {
             guard let data = rawLine.data(using: .utf8),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let type = obj["type"] as? String,
-                  type == "user" || type == "assistant" else { continue }
+                  let type = obj["type"] as? String else { continue }
+            if type == "ai-title" {
+                if let t = obj["aiTitle"] as? String, !t.isEmpty { aiTitle = t }
+                continue
+            }
+            if type == "last-prompt" {
+                if let p = obj["lastPrompt"] as? String, !p.isEmpty { lastPrompts.append(p) }
+                continue
+            }
+            guard type == "user" || type == "assistant" else { continue }
             let isSidechain = (obj["isSidechain"] as? Bool) ?? false
             if isSidechain { continue }
             let msg = obj["message"] as? [String: Any]
             let text = extractText(from: msg?["content"])
             if text.isEmpty { continue }
             messages.append(PreviewMessage(role: type, text: text))
+        }
+        if messages.isEmpty {
+            if !aiTitle.isEmpty {
+                messages.append(PreviewMessage(role: "ai-title", text: aiTitle))
+            }
+            for p in lastPrompts {
+                messages.append(PreviewMessage(role: "user", text: p))
+            }
         }
         return messages
     }

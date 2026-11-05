@@ -1,10 +1,34 @@
 import Foundation
 
+enum ProjectStatus: String, Codable, CaseIterable, Hashable {
+    case active
+    case todo
+    case complete
+}
+
 struct ProjectRecord: Codable, Identifiable, Hashable {
     var id: String
     var name: String
     var description: String = ""
     var knowledgeFiles: [String] = []
+    var status: ProjectStatus = .active
+
+    init(id: String, name: String, description: String = "", knowledgeFiles: [String] = [], status: ProjectStatus = .active) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.knowledgeFiles = knowledgeFiles
+        self.status = status
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        knowledgeFiles = try container.decodeIfPresent([String].self, forKey: .knowledgeFiles) ?? []
+        status = try container.decodeIfPresent(ProjectStatus.self, forKey: .status) ?? .active
+    }
 }
 
 struct Metadata: Codable {

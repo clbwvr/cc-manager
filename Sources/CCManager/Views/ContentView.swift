@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var selectedIds: Set<String> = []
     @State private var search: String = ""
     @State private var showNewChat = false
+    @State private var showCleanup = false
 
     var body: some View {
         NavigationSplitView {
@@ -38,9 +39,20 @@ struct ContentView: View {
                 .keyboardShortcut("n", modifiers: .command)
                 .help("Start a new Claude conversation (⌘N)")
             }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    showCleanup = true
+                } label: {
+                    Label("Clean Up Old Chats", systemImage: "trash")
+                }
+                .help("Bulk-delete conversations older than a chosen age")
+            }
         }
         .sheet(isPresented: $showNewChat) {
             NewChatSheet()
+        }
+        .sheet(isPresented: $showCleanup) {
+            CleanupSheet()
         }
         .alert(
             "Error",

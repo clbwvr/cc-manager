@@ -12,72 +12,72 @@ let outPath = CommandLine.arguments[1]
 let side: CGFloat = 1024
 let size = NSSize(width: side, height: side)
 
-let image = NSImage(size: size, flipped: false) { rect in
-    let ctx = NSGraphicsContext.current!.cgContext
+// macOS Big-Sur-style icon: content lives inside an 824x824 rounded square,
+// centered on a 1024x1024 transparent canvas (100px padding on all sides).
+let inset: CGFloat = 100
+let contentSide = side - inset * 2        // 824
+let cornerRadius: CGFloat = contentSide * 0.225  // ≈185, Apple's squircle radius
 
-    // Rounded-square background with a warm Claude-adjacent gradient.
-    let cornerRadius: CGFloat = 224
-    let bgPath = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+let image = NSImage(size: size, flipped: false) { _ in
+    let contentRect = NSRect(x: inset, y: inset, width: contentSide, height: contentSide)
+    let bgPath = NSBezierPath(roundedRect: contentRect, xRadius: cornerRadius, yRadius: cornerRadius)
+
+    NSGraphicsContext.current!.saveGraphicsState()
     bgPath.addClip()
 
-    let top = NSColor(calibratedRed: 0.85, green: 0.47, blue: 0.36, alpha: 1.0)    // warm terracotta
+    // Warm Claude-adjacent gradient.
+    let top = NSColor(calibratedRed: 0.85, green: 0.47, blue: 0.36, alpha: 1.0)    // terracotta
     let bottom = NSColor(calibratedRed: 0.55, green: 0.24, blue: 0.43, alpha: 1.0) // deep plum
-    let gradient = NSGradient(colors: [top, bottom])!
-    gradient.draw(in: rect, angle: 300)
+    NSGradient(colors: [top, bottom])!.draw(in: contentRect, angle: 300)
 
-    // Two overlapping speech bubbles.
-    let bubbleWhite = NSColor.white.withAlphaComponent(0.95)
-    let bubbleCream = NSColor(calibratedWhite: 1.0, alpha: 0.78)
+    // Scale factor so bubble dimensions track the 824 content area.
+    let s = contentSide / 1024.0
 
-    // Back bubble (slightly larger, behind).
+    // Two overlapping speech bubbles, centered within contentRect.
+    let cx = contentRect.midX
+    let cy = contentRect.midY
+
+    // Back bubble.
     do {
-        let bw: CGFloat = 560, bh: CGFloat = 420
-        let origin = NSPoint(x: (side - bw) / 2 + 60, y: (side - bh) / 2 - 30)
+        let bw: CGFloat = 560 * s, bh: CGFloat = 420 * s
+        let origin = NSPoint(x: cx - bw / 2 + 60 * s, y: cy - bh / 2 - 30 * s)
         let r = NSRect(origin: origin, size: NSSize(width: bw, height: bh))
-        let radius: CGFloat = 90
+        let radius: CGFloat = 90 * s
         let path = NSBezierPath(roundedRect: r, xRadius: radius, yRadius: radius)
-        // Tail.
-        let tailStart = NSPoint(x: r.maxX - 170, y: r.minY + 6)
-        let tailTip   = NSPoint(x: r.maxX - 30,  y: r.minY - 120)
-        let tailEnd   = NSPoint(x: r.maxX - 80,  y: r.minY + 4)
-        path.move(to: tailStart)
-        path.line(to: tailTip)
-        path.line(to: tailEnd)
+        path.move(to: NSPoint(x: r.maxX - 170 * s, y: r.minY + 6 * s))
+        path.line(to: NSPoint(x: r.maxX - 30 * s,  y: r.minY - 120 * s))
+        path.line(to: NSPoint(x: r.maxX - 80 * s,  y: r.minY + 4 * s))
         path.close()
-        bubbleCream.setFill()
+        NSColor(calibratedWhite: 1.0, alpha: 0.78).setFill()
         path.fill()
     }
 
-    // Front bubble (smaller, in front, offset the other way).
+    // Front bubble.
     do {
-        let bw: CGFloat = 500, bh: CGFloat = 360
-        let origin = NSPoint(x: (side - bw) / 2 - 80, y: (side - bh) / 2 + 60)
+        let bw: CGFloat = 500 * s, bh: CGFloat = 360 * s
+        let origin = NSPoint(x: cx - bw / 2 - 80 * s, y: cy - bh / 2 + 60 * s)
         let r = NSRect(origin: origin, size: NSSize(width: bw, height: bh))
-        let radius: CGFloat = 82
+        let radius: CGFloat = 82 * s
         let path = NSBezierPath(roundedRect: r, xRadius: radius, yRadius: radius)
-        let tailStart = NSPoint(x: r.minX + 70, y: r.minY + 8)
-        let tailTip   = NSPoint(x: r.minX - 20, y: r.minY - 110)
-        let tailEnd   = NSPoint(x: r.minX + 160, y: r.minY + 4)
-        path.move(to: tailStart)
-        path.line(to: tailTip)
-        path.line(to: tailEnd)
+        path.move(to: NSPoint(x: r.minX + 70 * s,  y: r.minY + 8 * s))
+        path.line(to: NSPoint(x: r.minX - 20 * s,  y: r.minY - 110 * s))
+        path.line(to: NSPoint(x: r.minX + 160 * s, y: r.minY + 4 * s))
         path.close()
-        bubbleWhite.setFill()
+        NSColor.white.withAlphaComponent(0.95).setFill()
         path.fill()
 
-        // Three dots to suggest a conversation.
-        let dotR: CGFloat = 34
+        // Three dots.
+        let dotR: CGFloat = 34 * s
         let dotY = r.midY - dotR / 2
-        let centers: [CGFloat] = [r.midX - 110, r.midX, r.midX + 110]
-        for cx in centers {
-            let dotRect = NSRect(x: cx - dotR / 2, y: dotY, width: dotR, height: dotR)
-            let dotPath = NSBezierPath(ovalIn: dotRect)
+        let offsets: [CGFloat] = [-110 * s, 0, 110 * s]
+        for off in offsets {
+            let dotRect = NSRect(x: r.midX + off - dotR / 2, y: dotY, width: dotR, height: dotR)
             NSColor(calibratedRed: 0.55, green: 0.24, blue: 0.43, alpha: 1.0).setFill()
-            dotPath.fill()
+            NSBezierPath(ovalIn: dotRect).fill()
         }
     }
 
-    _ = ctx // silence unused warning
+    NSGraphicsContext.current!.restoreGraphicsState()
     return true
 }
 

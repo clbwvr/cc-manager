@@ -7,7 +7,6 @@ final class ConversationStore: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var projects: [ProjectRecord] = []
-
     private var metadata = MetadataStore.load() {
         didSet { projects = metadata.projects }
     }
@@ -39,35 +38,61 @@ final class ConversationStore: ObservableObject {
             includingPropertiesForKeys: [.isDirectoryKey]
         ) else { return [] }
 
+        let oldCache = ParseCache.load()
+        var newCache: [String: CachedSession] = [:]
         var results: [Conversation] = []
+
         for dir in projectDirs {
             let isDir = (try? dir.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
             guard isDir else { continue }
             guard let files = try? fm.contentsOfDirectory(
                 at: dir,
-                includingPropertiesForKeys: [.contentModificationDateKey]
+                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]
             ) else { continue }
 
             for file in files where file.pathExtension == "jsonl" {
-                guard let parsed = JSONLParser.parse(at: file) else { continue }
-                let mod = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?
-                    .contentModificationDate ?? .distantPast
+                let rv = try? file.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+                let mod = rv?.contentModificationDate ?? .distantPast
+                let size = rv?.fileSize ?? 0
+                let key = file.path
                 let sessionId = file.deletingPathExtension().lastPathComponent
+
+                // Reuse the cached parse if the file is byte-for-byte unchanged.
+                let entry: CachedSession
+                if let cached = oldCache[key],
+                   cached.modified == mod.timeIntervalSince1970,
+                   cached.size == size {
+                    entry = cached
+                } else {
+                    guard let parsed = JSONLParser.parse(at: file) else { continue }
+                    entry = CachedSession(
+                        modified: mod.timeIntervalSince1970,
+                        size: size,
+                        cwd: parsed.cwd,
+                        firstUserMessage: parsed.firstUserMessage,
+                        messageCount: parsed.messageCount,
+                        previews: parsed.previews,
+                        searchableText: parsed.searchableText
+                    )
+                }
+                newCache[key] = entry
+
                 results.append(Conversation(
                     sessionId: sessionId,
                     filePath: file,
-                    cwd: parsed.cwd,
-                    autoTitle: parsed.firstUserMessage,
+                    cwd: entry.cwd,
+                    autoTitle: entry.firstUserMessage,
                     customTitle: nil,
                     lastModified: mod,
-                    messageCount: parsed.messageCount,
+                    messageCount: entry.messageCount,
                     isBase: false,
                     projectId: nil,
-                    previews: parsed.previews,
-                    searchableText: parsed.searchableText
+                    previews: entry.previews,
+                    searchableText: entry.searchableText
                 ))
             }
         }
+        ParseCache.save(newCache)
         return results.sorted { $0.lastModified > $1.lastModified }
     }
 
@@ -127,6 +152,12 @@ final class ConversationStore: ObservableObject {
         metadata.projects.first { $0.id == id }
     }
 
+    func setProjectStatus(_ id: String, status: ProjectStatus) {
+        guard let idx = metadata.projects.firstIndex(where: { $0.id == id }) else { return }
+        metadata.projects[idx].status = status
+        MetadataStore.save(metadata)
+    }
+
     func deleteProject(_ id: String) {
         metadata.projects.removeAll { $0.id == id }
         for key in metadata.conversationProjects.keys where metadata.conversationProjects[key] == id {
@@ -174,6 +205,25 @@ final class ConversationStore: ObservableObject {
         metadata.bases.removeAll { $0 == c.sessionId }
         MetadataStore.save(metadata)
         conversations.removeAll { $0.id == c.sessionId }
+    }
+
+    /// Bulk-trash several conversations with a single metadata save. Used by the cleanup sheet.
+    func deleteMany(_ convos: [Conversation]) {
+        guard !convos.isEmpty else { return }
+        let fm = FileManager.default
+        for c in convos {
+            try? fm.trashItem(at: c.filePath, resultingItemURL: nil)
+            let companion = c.filePath.deletingPathExtension()
+            if fm.fileExists(atPath: companion.path) {
+                try? fm.trashItem(at: companion, resultingItemURL: nil)
+            }
+            metadata.customTitles.removeValue(forKey: c.sessionId)
+            metadata.bases.removeAll { $0 == c.sessionId }
+            metadata.conversationProjects.removeValue(forKey: c.sessionId)
+        }
+        MetadataStore.save(metadata)
+        let ids = Set(convos.map(\.sessionId))
+        conversations.removeAll { ids.contains($0.id) }
     }
 
     @discardableResult
@@ -254,13 +304,23 @@ final class ConversationStore: ObservableObject {
         let escaped = shellCommand
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+        // Open as a new tab in the frontmost window (or create a window if none exist).
         let applescript = """
         tell application "iTerm"
             activate
-            set newWindow to (create window with default profile)
-            tell current session of newWindow
-                write text "\(escaped)"
-            end tell
+            if (count of windows) > 0 then
+                tell current window
+                    set newTab to (create tab with default profile)
+                    tell current session of newTab
+                        write text "\(escaped)"
+                    end tell
+                end tell
+            else
+                set newWindow to (create window with default profile)
+                tell current session of newWindow
+                    write text "\(escaped)"
+                end tell
+            end if
         end tell
         """
         runAppleScript(applescript)

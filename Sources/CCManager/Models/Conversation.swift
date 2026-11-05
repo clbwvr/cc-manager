@@ -1,6 +1,6 @@
 import Foundation
 
-struct PreviewMessage: Hashable {
+struct PreviewMessage: Hashable, Codable {
     let role: String
     let text: String
 }

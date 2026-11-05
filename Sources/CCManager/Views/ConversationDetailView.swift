@@ -110,7 +110,7 @@ private struct MessageBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(message.role.capitalized)
+            Text(message.role == "ai-title" ? "Title" : message.role.capitalized)
                 .font(.caption.bold())
                 .foregroundStyle(message.role == "user" ? .blue : .purple)
             Text(message.text)

@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct CCManagerApp: App {
     @StateObject private var store = ConversationStore()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup("Claude Conversations") {
@@ -19,5 +20,16 @@ struct CCManagerApp: App {
                 .keyboardShortcut("r", modifiers: .command)
             }
         }
+    }
+}
+
+/// Owns the cc-web phone server's lifecycle: up while the app runs, down on quit.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        WebServerController.shared.start()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        WebServerController.shared.stop()
     }
 }
