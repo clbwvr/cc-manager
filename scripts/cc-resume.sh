@@ -9,4 +9,4 @@ eval "$(grep -m1 '^export FLOODGATE_PROJECT_TOKEN=' ~/.zshrc)"
 id="$1"
 cwd="$2"
 cd "${cwd:-$HOME}" 2>/dev/null || cd "$HOME"
-exec claude --resume "$id"
+exec claude --resume "$id" --dangerously-skip-permissions
