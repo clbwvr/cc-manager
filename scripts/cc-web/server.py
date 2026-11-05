@@ -36,6 +36,8 @@ PROJECTS = HOME / ".claude" / "projects"
 META = HOME / ".claude" / "cc-manager.json"
 CACHE = HOME / ".claude" / "cc-manager-cache.json"
 RESUME_SH = str(HOME / "bin" / "cc-resume.sh")
+TTYD = "/opt/homebrew/bin/ttyd"
+TTYD_PORT = 7682
 PORT = 8787
 SEARCH_CAP = 200_000
 PREVIEW_LIMIT = 12
@@ -225,19 +227,22 @@ def detail_payload(sid):
 
 
 def do_resume(sid):
+    """Serve `claude --resume <id>` as a browser terminal via ttyd on TTYD_PORT, so the
+    whole interaction stays inside the cc-manager web UI (no separate SSH app)."""
     cwd = ""
     for c in load_conversations():
         if c["id"] == sid:
             cwd = c["cwd"]
             break
-    cmd = f"{shlex.quote(RESUME_SH)} {shlex.quote(sid)} {shlex.quote(cwd)}"
-    subprocess.run(["tmux", "kill-session", "-t", "cc"],
+    if not os.path.exists(TTYD):
+        return False, "ttyd not installed (brew install ttyd)", None
+    subprocess.run(["pkill", "-f", f"ttyd -p {TTYD_PORT}"],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    r = subprocess.run(["tmux", "new-session", "-d", "-s", "cc", cmd],
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if r.returncode != 0:
-        return False, r.stderr.decode("utf-8", "ignore") or "tmux failed"
-    return True, "Resumed ✓ Switch to Termius, tap your host → you're in it."
+    subprocess.Popen(
+        [TTYD, "-p", str(TTYD_PORT), "-W", "-t", "titleFixed=claude",
+         "-t", "fontSize=15", RESUME_SH, sid, cwd],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return True, "opening terminal…", TTYD_PORT
 
 
 PAGE = """<!doctype html><html lang=en><head>
@@ -300,6 +305,10 @@ border-radius:13px;font-size:17px;font-weight:600;text-align:center;text-decorat
 color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;max-width:88%;text-align:center;
 opacity:0;transition:opacity .2s;z-index:20;pointer-events:none}
 .toast.show{opacity:1}
+#termwrap{position:fixed;inset:0;background:#000;z-index:30;display:none;flex-direction:column}
+#termwrap.open{display:flex}
+.termbar{padding:calc(8px + env(safe-area-inset-top)) 12px 8px;background:#000;border-bottom:.5px solid #333;flex:none}
+#term{flex:1;width:100%;border:none;background:#000}
 </style></head><body>
 <header><h1>Conversations</h1><input id=q placeholder="Search" autocomplete=off autocapitalize=off></header>
 <div class=count id=count></div>
@@ -308,6 +317,7 @@ opacity:0;transition:opacity .2s;z-index:20;pointer-events:none}
 <div class=dbody id=dbody></div>
 <div class=resume><button onclick="resume()">▶ Resume this conversation</button></div></div>
 <div class=toast id=toast></div>
+<div id=termwrap><div class=termbar><button class=back onclick="closeTerm()">‹ Done</button></div><iframe id=term></iframe></div>
 <script>
 let cur=null, timer=null;
 const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -350,8 +360,16 @@ async function resume(){
   if(!cur)return;
   const r=await fetch('/api/resume',{method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({id:cur})});
-  const d=await r.json();toast(d.ok?('✓ '+d.message):('✕ '+d.message));
+  const d=await r.json();
+  if(d.ok && d.port){
+    toast('✓ starting Claude…');
+    const u=location.protocol+'//'+location.hostname+':'+d.port+'/';
+    setTimeout(()=>{document.getElementById('term').src=u;
+      document.getElementById('termwrap').classList.add('open');},900);
+  } else { toast('✕ '+d.message); }
 }
+function closeTerm(){document.getElementById('termwrap').classList.remove('open');
+  document.getElementById('term').src='about:blank';}
 load('');
 </script></body></html>"""
 
@@ -395,8 +413,8 @@ class H(BaseHTTPRequestHandler):
             sid = data.get("id", "")
             if not sid:
                 return self._send(400, json.dumps({"ok": False, "message": "no id"}))
-            ok, msg = do_resume(sid)
-            return self._send(200, json.dumps({"ok": ok, "message": msg}))
+            ok, msg, port = do_resume(sid)
+            return self._send(200, json.dumps({"ok": ok, "message": msg, "port": port}))
         self._send(404, json.dumps({"error": "not found"}))
 
 
