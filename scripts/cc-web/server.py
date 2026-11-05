@@ -123,6 +123,33 @@ def quick_parse(path):
             "previews": previews, "searchableText": "\n".join(searchable)}
 
 
+_aititle_cache = {}
+
+
+def ai_title_for(path, mtime):
+    """Claude Code's AI-summarized title (`ai-title` line). Read lazily and memoized
+    per (path, mtime); only JSON-parse lines that mention ai-title."""
+    hit = _aititle_cache.get(path)
+    if hit and hit[0] == mtime:
+        return hit[1]
+    title = ""
+    try:
+        with open(path, "r", errors="ignore") as f:
+            for line in f:
+                if "ai-title" not in line:
+                    continue
+                try:
+                    o = json.loads(line)
+                except Exception:
+                    continue
+                if o.get("type") == "ai-title" and o.get("aiTitle"):
+                    title = o["aiTitle"]
+    except OSError:
+        pass
+    _aititle_cache[path] = (mtime, title)
+    return title
+
+
 def load_conversations():
     meta = load_json(META) or {}
     custom = meta.get("customTitles", {})
@@ -149,7 +176,8 @@ def load_conversations():
                     if c is None:
                         continue
                 sid = f.stem
-                title = custom.get(sid) or c.get("firstUserMessage") or "(untitled)"
+                title = (custom.get(sid) or ai_title_for(key, st.st_mtime)
+                         or c.get("firstUserMessage") or "(untitled)")
                 pid = conv_proj.get(sid)
                 convs.append({
                     "id": sid,
@@ -209,7 +237,7 @@ def do_resume(sid):
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if r.returncode != 0:
         return False, r.stderr.decode("utf-8", "ignore") or "tmux failed"
-    return True, "Resumed in tmux session 'cc'. Open Termius (cc-attach) to interact."
+    return True, "Resumed in tmux session 'cc'. Open Termius (tap the host) to interact."
 
 
 PAGE = """<!doctype html><html lang=en><head>
@@ -272,7 +300,7 @@ opacity:0;transition:opacity .2s;z-index:20;pointer-events:none}
 <header><h1>Conversations</h1><input id=q placeholder="Search" autocomplete=off autocapitalize=off></header>
 <div class=count id=count></div>
 <div class=list id=list></div>
-<div id=detail><div class=dhead><button class=back onclick="closeDetail()">‹ Back</button></div>
+<div id=detail><div class=dhead><button class=back onclick="history.back()">‹ Back</button></div>
 <div class=dbody id=dbody></div>
 <div class=resume><button onclick="resume()">▶ Resume in Termius</button></div></div>
 <div class=toast id=toast></div>
@@ -306,8 +334,12 @@ async function openDetail(id){
    (c.previews||[]).map(m=>`<div class="msg ${m.role}"><div class=role>${m.role}</div>${esc(m.text)}</div>`).join('')
    +`<div class=meta style="margin-top:14px">${esc(c.cwd)}</div>`;
   document.getElementById('detail').classList.add('open');
+  history.pushState({detail:1},'');
 }
 function closeDetail(){document.getElementById('detail').classList.remove('open');cur=null;}
+window.addEventListener('popstate',()=>{
+  if(document.getElementById('detail').classList.contains('open')) closeDetail();
+});
 function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');
   setTimeout(()=>e.classList.remove('show'),3400);}
 async function resume(){
