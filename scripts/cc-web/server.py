@@ -237,7 +237,7 @@ def do_resume(sid):
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if r.returncode != 0:
         return False, r.stderr.decode("utf-8", "ignore") or "tmux failed"
-    return True, "Resumed ✓ Now tap 'Open in Termius' below."
+    return True, "Resumed ✓ Switch to Termius, tap your host → you're in it."
 
 
 PAGE = """<!doctype html><html lang=en><head>
@@ -306,8 +306,7 @@ opacity:0;transition:opacity .2s;z-index:20;pointer-events:none}
 <div class=list id=list></div>
 <div id=detail><div class=dhead><button class=back ontouchend="closeDetail();event.preventDefault()" onclick="closeDetail()">‹ Back</button></div>
 <div class=dbody id=dbody></div>
-<div class=resume><button onclick="resume()">▶ Resume this conversation</button>
-<a class=open href="ssh://calebweaver@calebs-macbook-pro-3.tail33f43d.ts.net">Open in Termius ↗</a></div></div>
+<div class=resume><button onclick="resume()">▶ Resume this conversation</button></div></div>
 <div class=toast id=toast></div>
 <script>
 let cur=null, timer=null;
