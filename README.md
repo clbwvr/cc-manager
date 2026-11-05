@@ -97,12 +97,17 @@ No test suite. No formatter configured.
 ## 6. Phone access (the companion system)
 
 ### Transport policy — READ THIS FIRST
-This is an Apple corp-MDM-managed Mac. **Apple InfoSec does not permit third-party mesh
-VPNs (Tailscale/Headscale/NetBird)** — policies [S.NTC.3]/[S.AUT.8]; Tailscale also
-collides with Apple's internal `100.64.0.0/10`. So remote access is **home-LAN only** via
-plain SSH. The *sanctioned* way to reach the Mac from outside home is **SPVPN / Machine
-VPN or the Admit gateway via GNS (`#help-vpn`)** — request that; everything below then
-works unchanged over it. Do **not** add a tunnel/overlay.
+This is an Apple corp-MDM-managed Mac. **Remote access runs over Tailscale** (installed,
+IT-approved for this machine as of 2026-11-05). The Mac's tailnet address is
+`calebs-macbook-pro-3.tail33f43d.ts.net` (`100.120.158.96`); the iPhone is on the same
+tailnet. With Tailscale on, SSH and cc-web work from anywhere (verified; no `100.64.0.0/10`
+conflict observed). Home-WiFi LAN (`.local`) still works as a fallback.
+
+Caveat for anyone reusing this: Apple InfoSec's *general* stance (official #ask-infosec,
+Oct 2026) is that third-party mesh VPNs (Tailscale/Headscale/NetBird) are **not** approved
+([S.NTC.3]/[S.AUT.8]); the blanket-sanctioned remote paths are **SPVPN/Machine VPN or the
+Admit gateway via GNS (`#help-vpn`)**. This setup rests on a specific IT exception, not the
+general policy — confirm your own approval before installing a tunnel/overlay.
 
 ### Prereqs on the Mac
 - System Settings → General → Sharing → **Remote Login** (SSH) on.
@@ -150,18 +155,20 @@ Two hard-won rules:
 `applicationWillTerminate`. **So the phone UI is up iff cc-manager is open.** No LaunchAgent.
 
 ### iOS setup
-- **Interactive:** Termius (free). Host `Calebs-MacBook-Pro.local` (fallback IP, currently
-  `192.168.1.158` — DHCP, prefer the `.local` name), user `calebweaver`, key `cc_morning`.
-  Connect → `~/bin/cc-attach.sh` → `claude`. tmux keeps it alive across disconnects.
-- **cc-manager UI:** Safari → `http://Calebs-MacBook-Pro.local:8787` → Share → Add to Home
-  Screen (opens fullscreen). Search → open conversation → copy the `claude --resume` command
-  (long-press; clipboard API is unavailable over plain http) or tap Resume, then attach in
-  Termius.
+- **Interactive:** Termius (free). Host `calebs-macbook-pro-3.tail33f43d.ts.net` (Tailscale,
+  works anywhere; on home WiFi `Calebs-MacBook-Pro.local` also works), user `calebweaver`,
+  key `cc_morning`. Connect → `~/bin/cc-attach.sh` → `claude`. tmux keeps it alive across disconnects.
+- **cc-manager UI:** Safari → `http://calebs-macbook-pro-3.tail33f43d.ts.net:8787` → Share →
+  Add to Home Screen (opens fullscreen). Search → open conversation → copy the `claude --resume`
+  command (long-press; clipboard API is unavailable over plain http) or tap Resume, then attach
+  in Termius.
 - **Morning:** Shortcut → Run Script Over SSH → `nohup ~/bin/cc-run-morning.sh >/dev/null 2>&1 </dev/null &`.
 
 ## 7. Machine-specific facts (for regeneration)
 - User `calebweaver`, home `/Users/calebweaver`.
 - Mac: `Calebs-MacBook-Pro.local`, LAN IP `192.168.1.158` (Verizon Fios router at
   `192.168.1.1`; **no UniFi gateway**, so UniFi Teleport is not an option).
+- Tailscale (IT-approved): Mac `calebs-macbook-pro-3.tail33f43d.ts.net` / `100.120.158.96`;
+  iPhone on the same tailnet. This is the anywhere-access transport.
 - CA bundle: `~/bundle.pem`. node: `.nvm/.../v24.14.1`. tmux: `/opt/homebrew/bin/tmux`.
 - cc-web port `8787`; tmux session name `cc`; SSH key `~/.ssh/cc_morning`.
