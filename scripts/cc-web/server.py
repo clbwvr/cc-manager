@@ -254,7 +254,7 @@ PAGE = """<!doctype html><html lang=en><head>
 body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 -apple-system,system-ui,sans-serif;
 padding-bottom:env(safe-area-inset-bottom)}
 header{position:sticky;top:0;background:rgba(0,0,0,.8);backdrop-filter:blur(20px);
-padding:12px 16px calc(10px);border-bottom:.5px solid #333;z-index:5}
+padding:calc(12px + env(safe-area-inset-top)) 16px 10px;border-bottom:.5px solid #333;z-index:5}
 h1{margin:0 0 10px;font-size:22px;font-weight:700}
 #q{width:100%;padding:11px 14px;border:none;border-radius:11px;background:var(--card2);
 color:var(--txt);font-size:17px}
@@ -275,7 +275,9 @@ padding:1px 7px;font-size:12px;margin-right:6px}
 transition:transform .22s ease;overflow-y:auto;z-index:10;display:flex;flex-direction:column}
 #detail.open{transform:none}
 .dhead{position:sticky;top:0;background:rgba(0,0,0,.85);backdrop-filter:blur(20px);
-padding:12px 16px;border-bottom:.5px solid #333;display:flex;gap:12px;align-items:center}
+padding:calc(12px + env(safe-area-inset-top)) 16px 12px;border-bottom:.5px solid #333;
+display:flex;gap:12px;align-items:center;z-index:2}
+.back{padding:6px 4px;min-height:40px}
 .back{color:var(--acc);font-size:17px;background:none;border:none;padding:0;font-weight:500}
 .dbody{padding:14px 16px 30px}
 .dtitle{font-size:21px;font-weight:700;margin:4px 0 10px}
@@ -302,7 +304,7 @@ opacity:0;transition:opacity .2s;z-index:20;pointer-events:none}
 <header><h1>Conversations</h1><input id=q placeholder="Search" autocomplete=off autocapitalize=off></header>
 <div class=count id=count></div>
 <div class=list id=list></div>
-<div id=detail><div class=dhead><button class=back onclick="history.back()">‹ Back</button></div>
+<div id=detail><div class=dhead><button class=back ontouchend="closeDetail();event.preventDefault()" onclick="closeDetail()">‹ Back</button></div>
 <div class=dbody id=dbody></div>
 <div class=resume><button onclick="resume()">▶ Resume this conversation</button>
 <a class=open href="ssh://calebweaver@calebs-macbook-pro-3.tail33f43d.ts.net">Open in Termius ↗</a></div></div>
