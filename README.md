@@ -154,10 +154,23 @@ Two hard-won rules:
 `applicationDidFinishLaunching` (passing `CC_WEB_PARENT_PID`) and `terminate`s it on
 `applicationWillTerminate`. **So the phone UI is up iff cc-manager is open.** No LaunchAgent.
 
+### Shell auto-attach (not a repo file — lives in `~/.zshrc`)
+So that tapping the Termius host lands directly in the `cc` session, `~/.zshrc` ends with:
+```zsh
+# cc-attach auto (phone): interactive SSH lands in the "cc" tmux session. Bypass: NO_CC=1
+if [[ -n "$SSH_CONNECTION" && -o interactive && -z "$TMUX" && -z "$NO_CC" && -x "$HOME/bin/cc-attach.sh" ]]; then
+  "$HOME/bin/cc-attach.sh"
+fi
+```
+The guard is interactive-SSH-only, so `cc-run-morning.sh` (non-interactive) and local Terminal
+use are unaffected.
+
 ### iOS setup
 - **Interactive:** Termius (free). Host `calebs-macbook-pro-3.tail33f43d.ts.net` (Tailscale,
   works anywhere; on home WiFi `Calebs-MacBook-Pro.local` also works), user `calebweaver`,
-  key `cc_morning`. Connect → `~/bin/cc-attach.sh` → `claude`. tmux keeps it alive across disconnects.
+  key `cc_morning`. **Tapping the host drops you straight into Claude** — `~/.zshrc` auto-runs
+  `cc-attach.sh` for interactive SSH logins (see below), so no command to type. `Ctrl-b d`
+  detaches; the tmux session survives disconnects. For a plain shell, connect with `NO_CC=1`.
 - **cc-manager UI:** Safari → `http://calebs-macbook-pro-3.tail33f43d.ts.net:8787` → Share →
   Add to Home Screen (opens fullscreen). Search → open conversation → copy the `claude --resume`
   command (long-press; clipboard API is unavailable over plain http) or tap Resume, then attach
