@@ -6,4 +6,5 @@ export PATH="/opt/homebrew/bin:/Users/calebweaver/.nvm/versions/node/v24.14.1/bi
 export NODE_EXTRA_CA_CERTS="$HOME/bundle.pem"
 eval "$(grep -m1 '^export FLOODGATE_PROJECT_TOKEN=' ~/.zshrc)"
 cd "$HOME"
-exec claude --dangerously-skip-permissions
+# No arg to --resume => Claude Code's built-in interactive conversation picker.
+exec claude --resume --dangerously-skip-permissions
