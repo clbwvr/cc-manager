@@ -237,7 +237,7 @@ def do_resume(sid):
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if r.returncode != 0:
         return False, r.stderr.decode("utf-8", "ignore") or "tmux failed"
-    return True, "Resumed in tmux session 'cc'. Open Termius (tap the host) to interact."
+    return True, "Resumed ✓ Now tap 'Open in Termius' below."
 
 
 PAGE = """<!doctype html><html lang=en><head>
@@ -289,9 +289,11 @@ code.sel{display:block;background:#000;border-radius:8px;padding:9px 11px;font:1
 color:var(--acc);word-break:break-all;user-select:all;-webkit-user-select:all}
 .resume{position:sticky;bottom:0;margin:0;padding:14px 16px calc(14px + env(safe-area-inset-bottom));
 background:rgba(0,0,0,.85);backdrop-filter:blur(20px);border-top:.5px solid #333}
-.resume button{width:100%;padding:15px;border:none;border-radius:13px;background:var(--acc);
-color:#fff;font-size:17px;font-weight:600}
-.resume button:active{opacity:.7}
+.resume button,.resume a{display:block;width:100%;box-sizing:border-box;padding:15px;border:none;
+border-radius:13px;font-size:17px;font-weight:600;text-align:center;text-decoration:none}
+.resume button{background:var(--acc);color:#fff}
+.resume a.open{background:var(--card2);color:var(--acc);margin-top:9px}
+.resume button:active,.resume a:active{opacity:.7}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--card2);
 color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;max-width:88%;text-align:center;
 opacity:0;transition:opacity .2s;z-index:20;pointer-events:none}
@@ -302,7 +304,8 @@ opacity:0;transition:opacity .2s;z-index:20;pointer-events:none}
 <div class=list id=list></div>
 <div id=detail><div class=dhead><button class=back onclick="history.back()">‹ Back</button></div>
 <div class=dbody id=dbody></div>
-<div class=resume><button onclick="resume()">▶ Resume in Termius</button></div></div>
+<div class=resume><button onclick="resume()">▶ Resume this conversation</button>
+<a class=open href="ssh://calebweaver@calebs-macbook-pro-3.tail33f43d.ts.net">Open in Termius ↗</a></div></div>
 <div class=toast id=toast></div>
 <script>
 let cur=null, timer=null;
